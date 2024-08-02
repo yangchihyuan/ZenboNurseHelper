@@ -1,0 +1,1 @@
+The Python folder is not used. We keep this folder to make the project look similar to other open_demo_zoo projects because they all have a cpp folder and a Python folder.
