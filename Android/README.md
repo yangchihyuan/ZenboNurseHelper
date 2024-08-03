@@ -17,3 +17,7 @@ This program runs on a Zenbo robot. Although this problem can be installed in An
 
 # Run the app #
 You can find the app 'Zenbo Nurse Helper' in both the robot's Android apps panel and Zenbo Apps panel.
+
+# Known problems and workarounds
+## libprotobuf incompatible problem
+Zenbo's Android version is 6, which is too old to be supported by the newly released protobuf libraries. The app will raise an exception if it receive a message with a variable of the type boolean or float. However, there is no exception for the types string, int32 and int64. Therefore, in our ServerSend.proto file, we replace the type of OpenPoseCoordinate.x and OpenPoseCoordinate.y from float to int32 to shun this problem.

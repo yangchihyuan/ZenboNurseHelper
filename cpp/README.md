@@ -1,49 +1,145 @@
 This folder contains the code files for the server side program of ZenboNurseHelper. It provides an Graphic User Interface (GUI) for a user to remotely control the robot's action. The GUI currently looks like the image below and allows a user to send commands to the robot-side's app, which calls Zenbo SDK to execute those commands.
 <img src="GUI.jpg" alt="GUI" height="250"/>
 
-In this project, I utilize Intel OpenVINO's human_pose_estimation_demo in their Open Model Zoo 2024 demos as a tool to guide our Zenbo robot. My server-side program receives frames transmitted from the robot-side app, estimates human pose landmark coordinates, and reports the results to the robot-side program.
-
-# Environment Setting
-- Ubuntu 22.04
-- Intel OpenVINO toolkit 2024.1.0
-- libboost-dev 1.74.0.3ubuntu7
-- libprotobuf-dev 3.12.4-1ubuntu7.22.04.1
-- libopencv-dev 4.5.4+dfsg-9ubuntu4
-- libgflags-dev 2.2.2-2
+In this project, we utilize Intel OpenVINO's human_pose_estimation_demo in their Open Model Zoo 2024 demos as a tool to guide our Zenbo robot. Our server-side program receives frames transmitted from the robot-side app, estimates human pose landmark coordinates, and reports the results to the robot-side program.
 
 # OpenVINO Setting
-Please follow Intel OpenVINO 2024.1.0's [instruction](https://docs.openvino.ai/2024/index.html) to install the library. OpenVINO 2024.1.0 does not support Ubuntu 24.04, which is the reason I use Ubuntu 22.04.
-We need Intel OpenVINO Toolkit Open Model Zoo as a framework. i git clone it from its GitHub repository.
-```
+Please download the Intel OpenVINO 2024.3's Ubuntu 24 archive. There are many ways to install OpenVINO [(Link)](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/download.html). For our case, we should use the archive file because it contains a setupvars.sh file, which is required by the open_model_zoo demo code.
+```sh
 cd ~
-git clone https://github.com/openvinotoolkit/open_model_zoo.git
+wget https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.3/linux/l_openvino_toolkit_ubuntu24_2024.3.0.16041.1e3b88e4e3f_x86_64.tgz
 ```
-We need a pretrained model human-pose-estimation-0001.xml used in the human_pose_estimation_demo, which is a part of the OpenPose algorithm.
+Unzip the file
+```sh
+tar -xvzf l_openvino_toolkit_ubuntu24_2024.3.0.16041.1e3b88e4e3f_x86_64.tgz
 ```
+Create a symbolic link
+```sh
+ln -s l_openvino_toolkit_ubuntu24_2024.3.0.16041.1e3b88e4e3f_x86_64 OpenVINO
+```
+Delete the downloaded file
+```sh
+rm l_openvino_toolkit_ubuntu24_2024.3.0.16041.1e3b88e4e3f_x86_64.tgz
+```
+
+```sh
+cd ~
+git clone --recurse-submodules https://github.com/openvinotoolkit/open_model_zoo.git
+```
+We need a pretrained model human-pose-estimation-0001.xml and its bin file used in the human_pose_estimation_demo, which is a part of the OpenPose algorithm.
+To download the model, we use a Python tool package omz_tools, whose installation instruction is a part of the open_model_zoo. See [(Link)](https://github.com/openvinotoolkit/open_model_zoo/blob/master/tools/model_tools/README.md).
+However, the instruction does not fully work on Ubuntu 24.04, which prevents system-wide Python package installation. Our solution is to install a Debian packaged Python application by
+```sh
+sudo apt install python3-pip
+```
+This command also installs the setuptools package, which is equivalent to the open_model_zoo's installation instruction "pip install setuptools".
+Thereafter, we install the the openvino-dev package. Because Ubuntu 24.04 prevent system-wide Python package installation, we need to modify Intel's instruction by replacing "pip install openvino-dev" to
+```sh
+pip install openvino-dev --break-system-packages
+```
+Navigate to the open_model_zoo/tools/model_tools directory, and install the omz_tools package
+```sh
+cd ~/open_model_zoo/tools/model_tools
+pip install . --break-system-packages
+```
+After installing the model_tools package, we use this command to download the human-pose-estimation models from a file server.
+```sh
 python3 ~/open_model_zoo/tools/model_tools/src/omz_tools/omz_downloader.py --list ~/open_model_zoo/demos/human_pose_estimation_demo/cpp/models.lst -o ~/open_model_zoo/models
 ```
+It will download 23 files saved in ~/open_model_zoo/models/intel and ~/open_model_zoo/models/public although we only need 2 of them. However, this command is better than the Intel's instruction "omz_downloader --all" because it will download a lot of files and take a long time.
 
-# Installation
+# Install Our Files
 Suppose your Open Model Zoo is installed in ~/open_model_zoo.
 Please git clone this repository into the demos directory.
-```
+```sh
 cd ~/open_model_zoo/demos
-git clone https://github.com/yangchihyuan/RobotVideoSummary_ServerSide.git
+git clone https://github.com/yangchihyuan/ZenboNurseHelper.git
 ```
 
-# Compile
+# Install Dependencies
+## Protocol Buffer. 
+We use this tool to pass messages from our server program to the Android app.
+```sh
+sudo apt install protobuf-compiler
+```
+It will install Protocol Buffer version 3.21.12-8.2.
+
+## OpenCV
+It is required by the open_model_zoo's human_pose_estimation demo, and we use it to show images captured by the Zenbo robot's camera.
+```sh
+sudo apt install libopencv-dev
+```
+It will install OpenCV version 4.6.0.
+
+## libgflags
+It is a tool library to help us parse command arguments
+```sh
+sudo apt install libgflags-dev
+```
+It will install libgflags 2.2.2-2.
+
+## Qt 
+We use it to create our GUI
+```sh
+sudo apt install qt6-base-dev
+sudo apt install qt6-multimedia-dev
+```
+It will install Qt version 6.4.2.
+
+## PortAudio 
+We use it to play voice on the server transmitted from the Android app and received from the robot's microphone.
+There is no package made for the Ubuntu system, and we need to compile it from downloaded source files, which are available on its GitHub page
+```sh
+cd ~
+git clone https://github.com/PortAudio/portaudio.git
+```
+There is a instruction page teaching how to compile and install PortAudio [(Link)](https://www.portaudio.com/docs/v19-doxydocs/compile_linux.html)
+However, as the page claims it is not reviewed, we modified its commands to
+```sh
+sudo apt-get install libasound2-dev
+cd ~/portaudio
+./configure
+make
+sudo make install
+```
+
+## whisper.cpp
+It is voice-to-text library and we utilize it on our server-side program to quickly generate sentences spoken by an operator, which will be sent to the Zenbo robot to speak out.
+There is no package make for the Ubuntu system, and we need to compile it from it source file downloaded from its GitHub repository
+```sh
+cd ~
+git clone https://github.com/ggerganov/whisper.cpp.git
+```
+We need a Whisper model. In out program, we use the base model for Mandarin.
+```sh
+cd ~/whisper.cpp
+bash ./models/download-ggml-model.sh base
+```
+It will download ggml-base.bin from the HuggingFace website.
+We need its compiled .o files, which will be used in our server-side program.
+```sh
+make
+```
+Because whisper.cpp runs slowly if it only uses CPUs, we need a GPU to accelerate its computation. In our case, Ubuntu desktop 24.04 installs the NVidia-driver 535 by default. It is not the latest one, but still works.
+
+# Compile and Run
 Run the OpenVINO's build_demos.sh in ~/open_model_zoo/demos to build this project, and an executable file 9_NurseHelper should be created at ~/omz_demos_build/intel64/Release/
-Set the permissions as executable for the run_server_side_program.sh in the RobotVideoSummary_ServerSide directory.
+To make it easy, we make s build_demos.sh in the directory ~/open_model_zoo/demos/ZenboNurseHelper/cpp
+```sh
+cd ~/open_model_zoo/demos/ZenboNurseHelper/cpp
+./build_demos.sh
 ```
-cd ~/open_model_zoo/demos/RobotVideoSummary_ServerSide/cpp
-chmod +x run_server_side_program.sh
-```
-Run the shell script.
-```
+This command will compile all open_model_zoo's demos, including our ZenboNurseHelper. After make the execute file 9_NurseHelper, execute the command to launch it.
+```sh
 ./run_server_side_program.sh
 ```
-To terminate this program, press Ctrl+C
+The program easily crashes because we use several libraries containing bugs. To detect those bugs, use this command
+```sh
+./run_server_side_program.sh debug
+```
+which use gdb for debugging.
 
-
-The main function is in the Main.cpp, which creates three threads. The 1st receives images through a socket, the 2nd estimates human poses, and the 3rd reports human key points to the Zenbo robot through another socket.
+# Known problems and workarounds
+## Qt FreeType crash problem
+Our program often crashes in this function FT_Load_Glyph () at /lib/x86_64-linux-gnu/libfreetype.so.6, which is called by QFontEngineFT::loadGlyph(QFontEngineFT::QGlyphSet*, unsigned int, QFixedPoint const&, QFontEngine::GlyphFormat, bool, bool) const () at /home/chihyuan/Qt/6.7.2/gcc_64/lib/libQt6Gui.so.6. According to two blogs [(Link1)](https://stackoverflow.com/questions/40490414/cannot-trace-cause-of-crash-in-qt-program) [(Link2)](https://blog.csdn.net/weixin_41797797/article/details/105861978), it is a Qt bug only occurring on Linux. To avoid this problem, use the command in the terminal window before launching our program.
 
